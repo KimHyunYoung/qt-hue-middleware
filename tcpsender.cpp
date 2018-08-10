@@ -29,28 +29,27 @@ tcpsender::tcpsender(QWidget *parent) :
     ui(new Ui::tcpsender)
 {
     ui->setupUi(this);
-    timer = new QElapsedTimer();
-    timer->start();
-    server = new QTcpServer(this);
+    timer = new QElapsedTimer(); // 시간 측정기
+    timer->start(); //시작
+    server = new QTcpServer(this); // 서버 시작
     client = new QTcpSocket();
-    client2 = new QTcpSocket();
-    servermat = new QTcpServer(this);
-    client = new QTcpSocket();
-    if(!server->listen(QHostAddress::Any,1667)){
+    client2 = new QTcpSocket(); //클라이언트 2개, 하나는 수신 하나는 발신
+    servermat = new QTcpServer(this); //매트랩용 클라이언트
+    if(!server->listen(QHostAddress::Any,1667)){ // 자극용 서버
         qDebug() << "TCPserver could not start";
     }
     else{
        qDebug() << "server start";
     }
-    if(!servermat->listen(QHostAddress::Any,1668)){
+    if(!servermat->listen(QHostAddress::Any,1668)){ // 매트랩용 클라이언트
         qDebug() << "TCPserver could not start";
     }
     else{
        qDebug() << "server start";
     }
     connect(server,SIGNAL(newConnection()), this, SLOT(newConnection()));
-    connect(servermat,SIGNAL(newConnection()), this, SLOT(newConnectionmat()));
-    hLib = LoadLibraryA("inpout32.dll");
+    connect(servermat,SIGNAL(newConnection()), this, SLOT(newConnectionmat())); // 활성화
+    hLib = LoadLibraryA("inpout32.dll"); //라이브러리 로드
     if(hLib == NULL)
     {
         errorFlag = true;
@@ -72,71 +71,32 @@ tcpsender::tcpsender(QWidget *parent) :
         errorFlag = true;
     }
     bool ok;
-    portNumber = portName.toInt(&ok,16);
-    bool isConnected = false;
-    Q_UNUSED(isConnected);
-
-
-    QHueBridgeManager manager;
-
-    isConnected = QObject::connect(&manager,
-                                   &QHueBridgeManager::detected,
-                                   [](QHueBridge* bridge) {
-            qDebug() << "Detected" << bridge->id();
-
-            bool isConnected = false;
-            Q_UNUSED(isConnected);
-
-            isConnected = QObject::connect(bridge,
-                                           &QHueBridge::error,
-                                           [](const QHueError& error) {
-                    qCritical() << "Error" << error.error << error.text;
-            });
-            Q_ASSERT(isConnected == true);
-
-            isConnected = QObject::connect(bridge,
-                                           &QHueBridge::userCreated,
-                                           [](const QString& userName) {
-                    qDebug() << "Created user" << userName;
-            });
-            Q_ASSERT(isConnected == true);
-
-            isConnected = QObject::connect(bridge,
-                                           &QHueBridge::configurationUpdated,
-                                           [](const QHueBridge::Configuration& config) {
-                    qDebug() << config.version;
-            });
-            bridge->updateLights();
-            bridge->requestConfiguration();
-    });
-    Q_ASSERT(isConnected == true);
-
-    manager.detect();
+    portNumber = portName.toInt(&ok,16); // 포트 번호는 h파일에
 }
 
 tcpsender::~tcpsender()
 {
     delete ui;
 }
-void tcpsender::newConnection(){
+void tcpsender::newConnection(){ //자극물 쪽의 연결
       client = server->nextPendingConnection();
       qDebug() << "connect with TCPclient";
      connect(client, SIGNAL(readyRead()),this, SLOT(readyRead()));
-     client2->connectToHost("192.168.0.6", 23);
+     client2->connectToHost("192.168.0.6", 23); //원래 정해진 주소로 연결. 원래는 이 연결된 주소로 쌍방연결을 해야함. 찾는거 할줄 모름 ㅎ...
 }
-void tcpsender::newConnectionmat(){
+void tcpsender::newConnectionmat(){//매트랩과의 연결
     clientmat = servermat->nextPendingConnection();
     qDebug() << "connect with TCPclientmat";
-    connect(clientmat, SIGNAL(readyRead()),this, SLOT(readyReadmat()));
+    connect(clientmat, SIGNAL(readyRead()),this, SLOT(readyReadmat())); //매트랩 수신부 연결
 
 }
 void tcpsender::readyReadmat(){
-       QByteArray byte = clientmat->readAll();
-       QString DataAsString(byte);
-       int result=DataAsString.toInt();
+       QByteArray byte = clientmat->readAll(); // 모두 읽기
+       QString DataAsString(byte); //데이터를 스트링으로
+       int result=DataAsString.toInt(); // 스트링을 정수형으로
 
        if(result == 0){
-           switch(positionone){
+           switch(positionone){ // 기록된 위치에 따라서 결과 실행
            case 1:
                 emit full();
                break;
@@ -203,7 +163,7 @@ void tcpsender::readyReadmat(){
            }
            client2->write(byte);
        }
-       else if(result == 6){
+       else if(result == 6){ // 6번은 재시작
            qDebug() << byte;
            client2->write(byte);
        }
